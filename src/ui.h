@@ -54,7 +54,7 @@ public:
     void draw(const std::string& text, int x, int y, int size, SDL_Color c,
               Align align = Align::Left, bool bold = false);
     int  width(const std::string& text, int size, bool bold = false);
-    int  lineHeight(int size) const;
+    int  lineHeight(int size);   // actual rendered height of a line, in pixels
 
 private:
     TTF_Font* fontFor(int size);

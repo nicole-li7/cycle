@@ -143,8 +143,9 @@ int TextRenderer::width(const std::string& text, int size, bool bold) {
     return w;
 }
 
-int TextRenderer::lineHeight(int size) const {
-    return static_cast<int>(size * 1.35);
+int TextRenderer::lineHeight(int size) {
+    TTF_Font* font = fontFor(size);
+    return font ? TTF_FontHeight(font) : static_cast<int>(size * 1.35);
 }
 
 // ---- Shared widgets -------------------------------------------------------
@@ -333,12 +334,31 @@ void drawHeader(SDL_Renderer* r, TextRenderer& text, YMD viewMonth,
     }
 }
 
-// One labelled row in the sidebar: small grey caption, value underneath.
+// One labelled row in the sidebar: small grey caption, the value underneath,
+// and optionally a quieter note under that.
+//
+// Every line is placed below the measured height of the line above it, so a
+// larger value or a different font can't make them collide. Returns the y to
+// start the next stat at.
+constexpr int kCaptionSize = 12;
+constexpr int kNoteSize    = 13;
+constexpr int kStatGap     = 16;
+
 int drawStat(TextRenderer& text, int x, int y, const std::string& caption,
-             const std::string& value, SDL_Color valueColor, int valueSize = 19) {
-    text.draw(caption, x, y, 12, color::kMuted);
-    text.draw(value, x, y + 17, valueSize, valueColor, Align::Left, true);
-    return y + 17 + text.lineHeight(valueSize) + 14;
+             const std::string& value, SDL_Color valueColor, int valueSize = 19,
+             const std::string& note = "") {
+    text.draw(caption, x, y, kCaptionSize, color::kMuted);
+    y += text.lineHeight(kCaptionSize) + 4;
+
+    text.draw(value, x, y, valueSize, valueColor, Align::Left, true);
+    y += text.lineHeight(valueSize);
+
+    if (!note.empty()) {
+        y += 6;
+        text.draw(note, x, y, kNoteSize, color::kMuted);
+        y += text.lineHeight(kNoteSize);
+    }
+    return y + kStatGap;
 }
 
 void drawLegendRow(SDL_Renderer* r, TextRenderer& text, int x, int y,
@@ -398,13 +418,11 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
         } else {
             headline = "In " + std::to_string(daysAway) + " days";
         }
-        y = drawStat(text, x, y, "NEXT PERIOD", headline, color::kPeriod, 22);
-
-        // The date, and how far out it could reasonably be.
-        const std::string when = formatShort(p.nextStart) +
-                                 "  \u00b1 " + std::to_string(p.spreadDays) + "d";
-        text.draw(when, x, y - 26, 13, color::kMuted);
-        y += 4;
+        // The date, and how far out it could reasonably be, sit under the
+        // headline as part of the same stat.
+        const std::string when = formatShort(p.nextStart) + "   \u00b1 " +
+                                 std::to_string(p.spreadDays) + " days";
+        y = drawStat(text, x, y, "NEXT PERIOD", headline, color::kPeriod, 22, when);
     }
 
     if (const int cycleDay = tracker.currentCycleDay(); cycleDay > 0) {
@@ -433,18 +451,26 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
     } else {
         basis = "Based on " + std::to_string(observed) + " logged cycles";
     }
-    text.draw(basis, x, y, 12, color::kMuted);
+    text.draw(basis, x, y, kCaptionSize, color::kMuted);
+    y += text.lineHeight(kCaptionSize) + 5;
     if (observed < 3) {
-        text.draw("Keep logging to sharpen it.", x, y + 17, 12, color::kDim);
+        text.draw("Keep logging to sharpen it.", x, y, kCaptionSize, color::kDim);
+        y += text.lineHeight(kCaptionSize);
     }
 
-    // Legend, pinned to the bottom of the panel.
-    int legendY = panel.h - 26 - 4 * 22 - 24;
+    // Legend, pinned to the bottom of the panel - but never above the content,
+    // so a taller sidebar can't overlap it either.
+    const int legendRowGap = 22;
+    int legendY = panel.h - 26 - 4 * legendRowGap - 24;
+    legendY = std::max(legendY, y + 28);
     text.draw("LEGEND", x, legendY - 24, 11, color::kDim);
-    drawLegendRow(r, text, x, legendY, color::kPeriod,    false, "Logged period");
-    drawLegendRow(r, text, x, legendY + 22, color::kPredicted, true,  "Predicted period");
-    drawLegendRow(r, text, x, legendY + 44, color::kFertile,   false, "Fertile window");
-    drawLegendRow(r, text, x, legendY + 66, color::kOvulation, true,  "Peak day");
+    drawLegendRow(r, text, x, legendY, color::kPeriod, false, "Logged period");
+    drawLegendRow(r, text, x, legendY + legendRowGap, color::kPredicted, true,
+                  "Predicted period");
+    drawLegendRow(r, text, x, legendY + 2 * legendRowGap, color::kFertile, false,
+                  "Fertile window");
+    drawLegendRow(r, text, x, legendY + 3 * legendRowGap, color::kOvulation, true,
+                  "Peak day");
 }
 
 } // namespace

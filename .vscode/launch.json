@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug app",
+      "name": "Debug Period Tracker",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/app",
+      "program": "${workspaceFolder}/build/Period Tracker.app/Contents/MacOS/Period Tracker",
       "args": [],
       "cwd": "${workspaceFolder}",
       "MIMode": "lldb",

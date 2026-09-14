@@ -17,8 +17,14 @@
     {
       "label": "run",
       "type": "shell",
-      "command": "./build/app",
+      "command": "'./build/Period Tracker.app/Contents/MacOS/Period Tracker'",
       "dependsOn": "cmake build",
+      "problemMatcher": []
+    },
+    {
+      "label": "install to /Applications",
+      "type": "shell",
+      "command": "cmake --build build && cmake --install build",
       "problemMatcher": []
     }
   ]

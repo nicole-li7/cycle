@@ -175,9 +175,7 @@ void drawButton(SDL_Renderer* r, TextRenderer& text, SDL_Rect rect,
 
     if (hovered) {
         // Lift the fill slightly rather than switching colour outright.
-        fill = (style == ButtonStyle::Primary)
-                   ? SDL_Color{242, 112, 145, 255}
-                   : color::kHover;
+        fill = (style == ButtonStyle::Primary) ? color::kPeriodHover : color::kHover;
     }
     fillRoundedRect(r, rect, 9, fill);
     text.draw(label, rect.x + rect.w / 2, rect.y + rect.h / 2 - fontSize * 2 / 3,
@@ -296,7 +294,11 @@ void drawDayCell(SDL_Renderer* r, TextRenderer& text, const Layout::Cell& cell,
     // whatever state the day is in.
     if (isToday) {
         SDL_Rect ring{marker.x - 5, marker.y - 5, marker.w + 10, marker.h + 10};
-        SDL_SetRenderDrawColor(r, color::kText.r, color::kText.g, color::kText.b, 90);
+        // Softened rather than solid, so it frames the day without competing
+        // with a logged or predicted marker inside it.
+        constexpr Uint8 kTodayRingAlpha = 130;
+        SDL_SetRenderDrawColor(r, color::kText.r, color::kText.g, color::kText.b,
+                               kTodayRingAlpha);
         for (int i = 0; i < 2; ++i) {
             SDL_Rect line{ring.x + i, ring.y + i, ring.w - 2 * i, ring.h - 2 * i};
             SDL_RenderDrawRect(r, &line);
@@ -367,7 +369,12 @@ void drawLegendRow(SDL_Renderer* r, TextRenderer& text, int x, int y,
     if (outlined) {
         strokeRoundedRect(r, dot, 6, 2, swatch, color::kPanel);
     } else {
-        fillRoundedRect(r, dot, 6, swatch);
+        // Filled swatches get a thin border. A pale fill on a pale panel is
+        // almost invisible at this size otherwise - the baby blue used for the
+        // fertile window is barely distinguishable from the pink sidebar
+        // without it. On the calendar the same fill is readable because the
+        // shape is far bigger.
+        strokeRoundedRect(r, dot, 6, 1, color::kMuted, swatch);
     }
     text.draw(label, x + 22, y, 13, color::kMuted);
 }

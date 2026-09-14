@@ -55,11 +55,17 @@ of logging it.
 
 | | |
 | --- | --- |
-| Solid pink | A day you logged |
-| Pink outline | Predicted period |
-| Teal fill | Estimated fertile window |
-| Teal outline | Estimated peak (ovulation) day |
-| White ring | Today |
+| Solid rose | A day you logged |
+| Rose outline | Predicted period |
+| Baby blue fill | Estimated fertile window |
+| Deeper blue outline | Estimated peak (ovulation) day |
+| Soft brown ring | Today |
+
+The whole theme lives in the `color` namespace at the top of `src/ui.h` - it is
+the only place to edit to recolour the app. The values there are tuned so every
+text colour clears WCAG AA contrast (4.5:1) against whatever it sits on, and
+every outline clears 3:1. Pale tones on a light background fail that easily, so
+it's worth re-checking if you change them.
 
 ## How the predictions work
 

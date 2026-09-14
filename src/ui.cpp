@@ -248,6 +248,7 @@ Layout computeLayout(YMD viewMonth, int windowW, int windowH) {
     layout.nextButton  = SDL_Rect{calendarW - kPadding - btn, btnY, btn, btn};
     layout.prevButton  = SDL_Rect{layout.nextButton.x - btn - 8, btnY, btn, btn};
     layout.todayButton = SDL_Rect{layout.prevButton.x - 70 - 12, btnY, 70, btn};
+    layout.summaryButton = SDL_Rect{layout.todayButton.x - 92 - 8, btnY, 92, btn};
     layout.profileButton = SDL_Rect{windowW - 26 - 56, kPadding + 2, 56, 24};
 
     // The grid always starts on the Sunday on or before the 1st, so the month
@@ -357,6 +358,7 @@ void drawHeader(SDL_Renderer* r, TextRenderer& text, YMD viewMonth,
 
     struct Button { SDL_Rect rect; const char* label; };
     const Button buttons[] = {
+        {layout.summaryButton, "Summary"},
         {layout.todayButton, "Today"},
         {layout.prevButton,  "<"},
         {layout.nextButton,  ">"},

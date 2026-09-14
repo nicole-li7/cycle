@@ -93,6 +93,7 @@ you. They're ordinary logged days, so click to correct them if the dates are off
 | Previous / next month | Left / Right arrow, or the `<` `>` buttons |
 | Jump back to today | `T`, or the Today button |
 | Change your setup answers | The Setup button in the sidebar |
+| See the symptom summary | The Summary button in the header |
 | Quit | Escape, or close the window |
 
 Clicking a greyed-out day from a neighbouring month jumps to that month instead
@@ -115,6 +116,29 @@ for that date. A dot under a day number on the calendar means it has notes.
 
 Symptoms do not feed the cycle predictions - those still come only from which
 days are marked as a period.
+
+## The symptom summary
+
+The **Summary** button shows what you've recorded, counted up.
+
+Each symptom gets a track representing one cycle, from day 1 to your typical
+cycle length, with the period shaded rose at the start and the fertile window
+shaded blue in the middle. Every time you recorded that symptom is drawn as a
+mark at the cycle day it fell on, so a symptom that clusters somewhere shows it.
+Repeats on the same cycle day stack into a taller mark.
+
+Alongside each track: how many days you've recorded it, and the **typical cycle
+day**, which is the median rather than the mean so a single odd month can't drag
+it. Below three placed occurrences it says "not enough yet" instead of showing a
+number that would only be noise.
+
+A note can only be placed on the track if a period start is known before it, and
+within 60 days of it. Notes that can't be placed still count towards the totals,
+and the subtitle says how many of them there are.
+
+This screen is read-only and deliberately has no effect on the predicted dates.
+Working backwards from symptoms to guess cycle timing is guesswork, and it has
+no business quietly moving the dates the app shows you.
 
 ## What the colours mean
 
@@ -198,6 +222,7 @@ contraception.
 | `src/profile.h/.cpp` | Your setup answers, and how much they're trusted |
 | `src/symptoms.h/.cpp` | Per-day symptoms, flow and mood, and their storage |
 | `src/dayeditor.h/.cpp` | The panel that opens when you click a day |
+| `src/insights.h/.cpp` | The symptom summary: counting and drawing it |
 | `src/onboarding.h/.cpp` | The first-run setup screen |
 | `src/date.h/.cpp` | Date helpers built on C++20 `<chrono>` |
 | `src/ui.h/.cpp` | Palette, fonts, shared widgets, calendar layout and drawing |

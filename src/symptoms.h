@@ -64,6 +64,8 @@ public:
     // How often each symptom has been recorded, most frequent first.
     std::vector<std::pair<Symptom, int>> mostCommon() const;
 
+    const std::map<Date, DayEntry>& entries() const { return entries_; }
+
 private:
     std::map<Date, DayEntry> entries_;
 };

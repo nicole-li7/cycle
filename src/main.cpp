@@ -20,6 +20,7 @@
 
 #include "date.h"
 #include "dayeditor.h"
+#include "insights.h"
 #include "onboarding.h"
 #include "profile.h"
 #include "tracker.h"
@@ -111,6 +112,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // calendar is still laid out and drawn underneath it.
     std::optional<DayEditor> dayEditor;
 
+    // The symptom summary replaces the calendar rather than sitting over it.
+    // Recomputed when opened, not every frame - nothing changes while it's up.
+    bool           showSummary = false;
+    Insights       insights;
+    InsightsScreen summaryScreen;
+
     // ---- 2. Main loop -----------------------------------------------------
     while (running) {
         SDL_GetWindowSize(window, &windowW, &windowH);
@@ -120,6 +127,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
         Layout layout;
         if (onboarding) {
             onboarding->layout(windowW, windowH);
+        } else if (showSummary) {
+            summaryScreen.layout(windowW, windowH);
         } else {
             layout = computeLayout(viewMonth, windowW, windowH);
             if (dayEditor) {
@@ -155,8 +164,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
                     dayEditor->handleClick(x, y);
                     break;
                 }
+                if (showSummary) {
+                    if (pointIn(summaryScreen.closeButton, x, y)) {
+                        showSummary = false;
+                    }
+                    break;
+                }
 
-                if (pointIn(layout.profileButton, x, y)) {
+                if (pointIn(layout.summaryButton, x, y)) {
+                    insights = computeInsights(tracker);
+                    showSummary = true;
+                } else if (pointIn(layout.profileButton, x, y)) {
                     onboarding.emplace(tracker.profile(), /*editing=*/true);
                 } else if (pointIn(layout.prevButton, x, y)) {
                     viewMonth = YMD{addMonths(firstOfMonth(viewMonth), -1)};
@@ -184,6 +202,13 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 }
                 if (dayEditor) {
                     dayEditor->handleKey(event.key.keysym.sym);
+                    break;
+                }
+                if (showSummary) {
+                    // Escape backs out of the summary rather than quitting.
+                    if (event.key.keysym.sym == SDLK_ESCAPE) {
+                        showSummary = false;
+                    }
                     break;
                 }
                 switch (event.key.keysym.sym) {
@@ -245,6 +270,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // Each screen only draws; the finished frame is presented once here.
         if (onboarding) {
             onboarding->draw(renderer, text, windowW, windowH, mouseX, mouseY);
+        } else if (showSummary) {
+            drawInsights(renderer, text, insights, summaryScreen, windowW, windowH,
+                         mouseX, mouseY);
         } else {
             drawApp(renderer, text, tracker, viewMonth, layout, windowW, windowH,
                     mouseX, mouseY);

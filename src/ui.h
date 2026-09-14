@@ -111,6 +111,7 @@ struct Layout {
     SDL_Rect prevButton{};
     SDL_Rect nextButton{};
     SDL_Rect todayButton{};
+    SDL_Rect summaryButton{};
     SDL_Rect profileButton{};
 
     struct Cell {

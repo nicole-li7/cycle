@@ -50,6 +50,12 @@ constexpr SDL_Color kOnPeriod    = {255, 252, 250, 255};  // text on deep rose
 bool pointIn(const SDL_Rect& r, int x, int y);
 
 void fillRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, SDL_Color c);
+
+// Draws only the band of a circle, leaving the middle untouched. Unlike
+// strokeRoundedRect this paints no interior, so it can be drawn over something
+// that should still show through the hole.
+void fillRing(SDL_Renderer* r, int centreX, int centreY, int outerRadius,
+              int thickness, SDL_Color c);
 void strokeRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, int thickness,
                        SDL_Color stroke, SDL_Color inner);
 

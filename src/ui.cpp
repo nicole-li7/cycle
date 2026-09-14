@@ -33,6 +33,39 @@ void fillRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, SDL_Color c) {
     }
 }
 
+void fillRing(SDL_Renderer* r, int centreX, int centreY, int outerRadius,
+              int thickness, SDL_Color c) {
+    if (outerRadius <= 0 || thickness <= 0) {
+        return;
+    }
+    SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
+    const int innerRadius = std::max(0, outerRadius - thickness);
+
+    // One scanline at a time. Each row of a ring is either a single span (near
+    // the top and bottom, where the hole hasn't started yet) or two spans with
+    // the hole between them.
+    for (int y = -outerRadius; y < outerRadius; ++y) {
+        const double dy = y + 0.5;
+        const double outerSpan = static_cast<double>(outerRadius) * outerRadius - dy * dy;
+        if (outerSpan <= 0.0) {
+            continue;
+        }
+        const int outerX = static_cast<int>(std::lround(std::sqrt(outerSpan)));
+        const double innerSpan = static_cast<double>(innerRadius) * innerRadius - dy * dy;
+
+        if (innerSpan > 0.0) {
+            const int innerX = static_cast<int>(std::lround(std::sqrt(innerSpan)));
+            SDL_Rect left{centreX - outerX, centreY + y, outerX - innerX, 1};
+            SDL_Rect right{centreX + innerX, centreY + y, outerX - innerX, 1};
+            SDL_RenderFillRect(r, &left);
+            SDL_RenderFillRect(r, &right);
+        } else {
+            SDL_Rect span{centreX - outerX, centreY + y, 2 * outerX, 1};
+            SDL_RenderFillRect(r, &span);
+        }
+    }
+}
+
 void strokeRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, int thickness,
                        SDL_Color stroke, SDL_Color inner) {
     // An outline is just a filled shape with a smaller filled shape punched
@@ -293,16 +326,13 @@ void drawDayCell(SDL_Renderer* r, TextRenderer& text, const Layout::Cell& cell,
     // Today gets a ring around the whole cell, drawn last so it sits on top of
     // whatever state the day is in.
     if (isToday) {
-        SDL_Rect ring{marker.x - 5, marker.y - 5, marker.w + 10, marker.h + 10};
-        // Softened rather than solid, so it frames the day without competing
-        // with a logged or predicted marker inside it.
-        constexpr Uint8 kTodayRingAlpha = 130;
-        SDL_SetRenderDrawColor(r, color::kText.r, color::kText.g, color::kText.b,
-                               kTodayRingAlpha);
-        for (int i = 0; i < 2; ++i) {
-            SDL_Rect line{ring.x + i, ring.y + i, ring.w - 2 * i, ring.h - 2 * i};
-            SDL_RenderDrawRect(r, &line);
-        }
+        // A circle to match every other marker in the calendar, and a ring
+        // rather than an outlined shape so a logged or predicted marker inside
+        // it still shows through the middle.
+        constexpr int kTodayGap       = 4;   // breathing room around the marker
+        constexpr int kTodayThickness = 2;
+        fillRing(r, marker.x + marker.w / 2, marker.y + marker.h / 2,
+                 marker.w / 2 + kTodayGap, kTodayThickness, color::kMuted);
         boldNumber = true;
     }
 

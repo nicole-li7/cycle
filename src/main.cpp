@@ -1,19 +1,25 @@
 // Period Tracker - a small offline desktop app.
 //
-// Everything you log stays in a plain text file on this Mac; nothing is sent
-// anywhere. See Tracker::dataPath() for where that file lives.
+// Everything you log stays in plain text files on this Mac; nothing is sent
+// anywhere. See Tracker::dataPath() and Profile::path() for where they live.
 //
 // The program is the standard three parts of any GUI app:
 //   1. setup     - open a window
 //   2. main loop - handle input, then redraw  (repeats until you quit)
 //   3. teardown  - clean up
+//
+// There are two screens. First-time launch shows setup; after that, the
+// calendar. The Setup button in the sidebar reopens setup to change an answer.
 
 #include <SDL.h>
 #include <SDL_ttf.h>
 
 #include <cstdio>
+#include <optional>
 
 #include "date.h"
+#include "onboarding.h"
+#include "profile.h"
 #include "tracker.h"
 #include "ui.h"
 
@@ -22,7 +28,7 @@ namespace {
 constexpr int kInitialWidth  = 1040;
 constexpr int kInitialHeight = 700;
 constexpr int kMinWidth      = 880;
-constexpr int kMinHeight     = 600;
+constexpr int kMinHeight     = 640;
 
 void showFatalError(const char* what, const char* detail) {
     std::fprintf(stderr, "%s: %s\n", what, detail);
@@ -88,15 +94,29 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
 
     // ---- Application state ------------------------------------------------
-    Tracker tracker;                 // loads the saved log from disk
+    Tracker tracker;                 // loads the saved log and profile from disk
     YMD  viewMonth{today()};         // which month the calendar is showing
     bool running = true;
     int  mouseX = 0, mouseY = 0;
 
+    // Setup runs automatically the very first time, and on demand after that.
+    std::optional<Onboarding> onboarding;
+    if (!tracker.profile().completedSetup) {
+        onboarding.emplace(tracker.profile(), /*editing=*/false);
+    }
+
     // ---- 2. Main loop -----------------------------------------------------
     while (running) {
         SDL_GetWindowSize(window, &windowW, &windowH);
-        const Layout layout = computeLayout(viewMonth, windowW, windowH);
+
+        // Work out where everything is *before* handling clicks, so what you
+        // can click is exactly what was drawn.
+        Layout layout;
+        if (onboarding) {
+            onboarding->layout(windowW, windowH);
+        } else {
+            layout = computeLayout(viewMonth, windowW, windowH);
+        }
 
         // --- Handle input ---
         SDL_Event event;
@@ -118,15 +138,18 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 const int x = event.button.x;
                 const int y = event.button.y;
 
-                auto hit = [&](const SDL_Rect& r) {
-                    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-                };
+                if (onboarding) {
+                    onboarding->handleClick(x, y);
+                    break;
+                }
 
-                if (hit(layout.prevButton)) {
+                if (pointIn(layout.profileButton, x, y)) {
+                    onboarding.emplace(tracker.profile(), /*editing=*/true);
+                } else if (pointIn(layout.prevButton, x, y)) {
                     viewMonth = YMD{addMonths(firstOfMonth(viewMonth), -1)};
-                } else if (hit(layout.nextButton)) {
+                } else if (pointIn(layout.nextButton, x, y)) {
                     viewMonth = YMD{addMonths(firstOfMonth(viewMonth), 1)};
-                } else if (hit(layout.todayButton)) {
+                } else if (pointIn(layout.todayButton, x, y)) {
                     viewMonth = YMD{today()};
                 } else if (const Layout::Cell* cell = layout.cellAt(x, y)) {
                     // Clicking a day in a neighbouring month jumps to that
@@ -141,6 +164,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
             }
 
             case SDL_KEYDOWN:
+                if (onboarding) {
+                    onboarding->handleKey(event.key.keysym.sym);
+                    break;
+                }
                 switch (event.key.keysym.sym) {
                 case SDLK_LEFT:
                     viewMonth = YMD{addMonths(firstOfMonth(viewMonth), -1)};
@@ -167,9 +194,30 @@ int main(int /*argc*/, char* /*argv*/[]) {
             }
         }
 
+        // --- Apply the result of setup, if it just ended ---
+        if (onboarding && (onboarding->finished() || onboarding->cancelled())) {
+            if (onboarding->finished()) {
+                tracker.setProfile(onboarding->result());
+                if (onboarding->shouldLogLastPeriod()) {
+                    // Put the reported period on the calendar so there's
+                    // something to count from straight away. It's ordinary
+                    // logged data, so it can be corrected by clicking.
+                    tracker.logRange(onboarding->lastPeriodStart(),
+                                     onboarding->lastPeriodLength());
+                }
+                viewMonth = YMD{today()};
+            }
+            onboarding.reset();
+            continue;   // re-run the loop so the calendar lays out this frame
+        }
+
         // --- Draw ---
-        drawApp(renderer, text, tracker, viewMonth, layout, windowW, windowH,
-                mouseX, mouseY);
+        if (onboarding) {
+            onboarding->draw(renderer, text, windowW, windowH, mouseX, mouseY);
+        } else {
+            drawApp(renderer, text, tracker, viewMonth, layout, windowW, windowH,
+                    mouseX, mouseY);
+        }
     }
 
     // ---- 3. Teardown ------------------------------------------------------

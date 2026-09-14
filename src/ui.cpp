@@ -5,6 +5,10 @@
 
 // ---- Drawing primitives ---------------------------------------------------
 
+bool pointIn(const SDL_Rect& r, int x, int y) {
+    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+}
+
 void fillRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, SDL_Color c) {
     if (rect.w <= 0 || rect.h <= 0) {
         return;
@@ -143,6 +147,42 @@ int TextRenderer::lineHeight(int size) const {
     return static_cast<int>(size * 1.35);
 }
 
+// ---- Shared widgets -------------------------------------------------------
+
+void drawButton(SDL_Renderer* r, TextRenderer& text, SDL_Rect rect,
+                const std::string& label, bool hovered, ButtonStyle style,
+                int fontSize) {
+    SDL_Color fill  = color::kCard;
+    SDL_Color label_ = color::kText;
+
+    switch (style) {
+    case ButtonStyle::Primary:
+        fill = color::kPeriod;
+        label_ = color::kOnPeriod;
+        break;
+    case ButtonStyle::Selected:
+        // A chosen option is outlined rather than filled, so a row of them
+        // still reads as a row and not as several competing buttons.
+        strokeRoundedRect(r, rect, 9, 2, color::kPeriod, color::kBackground);
+        label_ = color::kPeriod;
+        text.draw(label, rect.x + rect.w / 2, rect.y + rect.h / 2 - fontSize * 2 / 3,
+                  fontSize, label_, Align::Center, true);
+        return;
+    case ButtonStyle::Plain:
+        break;
+    }
+
+    if (hovered) {
+        // Lift the fill slightly rather than switching colour outright.
+        fill = (style == ButtonStyle::Primary)
+                   ? SDL_Color{242, 112, 145, 255}
+                   : color::kHover;
+    }
+    fillRoundedRect(r, rect, 9, fill);
+    text.draw(label, rect.x + rect.w / 2, rect.y + rect.h / 2 - fontSize * 2 / 3,
+              fontSize, label_, Align::Center, style == ButtonStyle::Primary);
+}
+
 // ---- Layout ---------------------------------------------------------------
 
 namespace {
@@ -152,10 +192,6 @@ constexpr int kPadding      = 26;
 constexpr int kHeaderHeight = 96;
 constexpr int kWeekdayRow   = 30;
 constexpr int kGridRows     = 6;
-
-bool pointIn(const SDL_Rect& r, int x, int y) {
-    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-}
 
 } // namespace
 
@@ -180,6 +216,7 @@ Layout computeLayout(YMD viewMonth, int windowW, int windowH) {
     layout.nextButton  = SDL_Rect{calendarW - kPadding - btn, btnY, btn, btn};
     layout.prevButton  = SDL_Rect{layout.nextButton.x - btn - 8, btnY, btn, btn};
     layout.todayButton = SDL_Rect{layout.prevButton.x - 70 - 12, btnY, 70, btn};
+    layout.profileButton = SDL_Rect{windowW - 26 - 56, kPadding + 2, 56, 24};
 
     // The grid always starts on the Sunday on or before the 1st, so the month
     // is shown in the context of whole weeks.
@@ -283,10 +320,7 @@ void drawHeader(SDL_Renderer* r, TextRenderer& text, YMD viewMonth,
         {layout.nextButton,  ">"},
     };
     for (const Button& b : buttons) {
-        const bool hovered = pointIn(b.rect, mouseX, mouseY);
-        fillRoundedRect(r, b.rect, 8, hovered ? color::kHover : color::kCard);
-        text.draw(b.label, b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2 - 9,
-                  14, color::kText, Align::Center);
+        drawButton(r, text, b.rect, b.label, pointIn(b.rect, mouseX, mouseY));
     }
 
     // Weekday initials above the grid.
@@ -319,7 +353,7 @@ void drawLegendRow(SDL_Renderer* r, TextRenderer& text, int x, int y,
 }
 
 void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
-                 const Layout& layout) {
+                 const Layout& layout, int mouseX, int mouseY) {
     const SDL_Rect& panel = layout.sidebar;
     SDL_SetRenderDrawColor(r, color::kPanel.r, color::kPanel.g, color::kPanel.b, 255);
     SDL_RenderFillRect(r, &panel);
@@ -328,15 +362,25 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
     int y = kPadding + 4;
 
     text.draw("Period Tracker", x, y, 20, color::kText, Align::Left, true);
+    drawButton(r, text, layout.profileButton, "Setup",
+               pointIn(layout.profileButton, mouseX, mouseY), ButtonStyle::Plain, 12);
     y += 40;
 
     const Prediction& p = tracker.prediction();
 
     if (!p.valid) {
-        text.draw("No data yet.", x, y, 15, color::kMuted);
+        text.draw("No period logged yet.", x, y, 15, color::kMuted);
         y += 26;
         text.draw("Click the days of your last", x, y, 13, color::kDim);
         text.draw("period to get started.", x, y + 19, 13, color::kDim);
+        y += 52;
+
+        // Setup answers are still worth showing back, so the screen isn't bare.
+        if (tracker.profile().typicalCycle > 0) {
+            drawStat(text, x, y, "YOU TOLD US",
+                     std::to_string(tracker.profile().typicalCycle) + " day cycle",
+                     color::kMuted, 17);
+        }
         return;
     }
 
@@ -355,7 +399,11 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
             headline = "In " + std::to_string(daysAway) + " days";
         }
         y = drawStat(text, x, y, "NEXT PERIOD", headline, color::kPeriod, 22);
-        text.draw(formatShort(p.nextStart), x, y - 26, 13, color::kMuted);
+
+        // The date, and how far out it could reasonably be.
+        const std::string when = formatShort(p.nextStart) +
+                                 "  \u00b1 " + std::to_string(p.spreadDays) + "d";
+        text.draw(when, x, y - 26, 13, color::kMuted);
         y += 4;
     }
 
@@ -363,10 +411,8 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
         y = drawStat(text, x, y, "CYCLE DAY", std::to_string(cycleDay), color::kText);
     }
 
-    const std::string cycleText = std::to_string(p.avgCycleDays) + " days";
-    y = drawStat(text, x, y, p.estimated ? "CYCLE LENGTH (ESTIMATE)" : "AVERAGE CYCLE",
-                 cycleText, color::kText);
-
+    y = drawStat(text, x, y, "AVERAGE CYCLE",
+                 std::to_string(p.avgCycleDays) + " days", color::kText);
     y = drawStat(text, x, y, "AVERAGE PERIOD",
                  std::to_string(p.avgPeriodDays) + " days", color::kText);
 
@@ -376,10 +422,20 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
                      formatShort(cycles.back().start), color::kText, 17);
     }
 
-    if (p.estimated) {
-        text.draw("Log a few cycles for a", x, y, 12, color::kDim);
-        text.draw("prediction based on you.", x, y + 17, 12, color::kDim);
-        y += 44;
+    // How much the figures above actually rest on. This is the honest version
+    // of "accuracy improves as you log more".
+    const int observed = p.observedCycles;
+    std::string basis;
+    if (observed == 0) {
+        basis = "Based on your setup answers";
+    } else if (observed == 1) {
+        basis = "Based on 1 logged cycle";
+    } else {
+        basis = "Based on " + std::to_string(observed) + " logged cycles";
+    }
+    text.draw(basis, x, y, 12, color::kMuted);
+    if (observed < 3) {
+        text.draw("Keep logging to sharpen it.", x, y + 17, 12, color::kDim);
     }
 
     // Legend, pinned to the bottom of the panel.
@@ -410,7 +466,7 @@ void drawApp(SDL_Renderer* renderer, TextRenderer& text, const Tracker& tracker,
         drawDayCell(renderer, text, cell, tracker, hovered);
     }
 
-    drawSidebar(renderer, text, tracker, layout);
+    drawSidebar(renderer, text, tracker, layout, mouseX, mouseY);
 
     SDL_RenderPresent(renderer);
 }

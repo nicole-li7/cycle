@@ -1,4 +1,5 @@
-// Everything to do with drawing: colours, fonts, and the calendar layout.
+// Everything to do with drawing: colours, fonts, shared widgets, and the
+// calendar layout.
 #pragma once
 
 #include <SDL.h>
@@ -30,6 +31,8 @@ constexpr SDL_Color kOnPeriod   = {255, 255, 255, 255};
 } // namespace color
 
 // ---- Drawing primitives ---------------------------------------------------
+
+bool pointIn(const SDL_Rect& r, int x, int y);
 
 void fillRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, SDL_Color c);
 void strokeRoundedRect(SDL_Renderer* r, SDL_Rect rect, int radius, int thickness,
@@ -66,7 +69,19 @@ private:
     std::map<CacheKey, SDL_Texture*> cache_;
 };
 
-// ---- Layout ---------------------------------------------------------------
+// ---- Shared widgets -------------------------------------------------------
+
+enum class ButtonStyle {
+    Plain,      // sits on the background, quiet
+    Primary,    // the main action on a screen
+    Selected,   // a chosen option in a group
+};
+
+void drawButton(SDL_Renderer* r, TextRenderer& text, SDL_Rect rect,
+                const std::string& label, bool hovered,
+                ButtonStyle style = ButtonStyle::Plain, int fontSize = 14);
+
+// ---- Calendar layout ------------------------------------------------------
 
 // Positions are computed once per frame and reused for both drawing and
 // click-testing, so the two can never disagree about where a day cell is.
@@ -75,6 +90,7 @@ struct Layout {
     SDL_Rect prevButton{};
     SDL_Rect nextButton{};
     SDL_Rect todayButton{};
+    SDL_Rect profileButton{};
 
     struct Cell {
         SDL_Rect rect{};

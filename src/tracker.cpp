@@ -1,6 +1,7 @@
 #include "tracker.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -8,7 +9,7 @@
 
 namespace {
 
-// Sensible fallbacks used until there is enough history to average.
+// Sensible fallbacks used when setup was skipped and nothing is logged yet.
 constexpr int kDefaultCycleDays  = 28;
 constexpr int kDefaultPeriodDays = 5;
 
@@ -29,18 +30,65 @@ constexpr int kLutealPhaseDays = 14;
 constexpr int kFertileBefore   = 5;  // sperm survival
 constexpr int kFertileAfter    = 1;  // egg survival
 
-int averageOf(const std::vector<int>& values) {
-    if (values.empty()) {
+// Combines what you told us during setup with what has actually been observed.
+//
+// `prior` is the setup answer and `priorWeight` is how many observed cycles it
+// is currently worth. With nothing logged the answer is just the prior; each
+// real cycle pulls the result further towards reality. Once priorWeight has
+// decayed to zero (see effectivePriorWeight) the setup answer drops out
+// entirely and the result is purely your own data.
+int blend(int prior, int priorWeight, const std::vector<int>& observed) {
+    if (observed.empty()) {
+        return prior;
+    }
+    if (priorWeight <= 0) {
+        return static_cast<int>(std::lround(
+            std::accumulate(observed.begin(), observed.end(), 0.0) /
+            static_cast<double>(observed.size())));
+    }
+    const double total = static_cast<double>(prior) * priorWeight +
+                         std::accumulate(observed.begin(), observed.end(), 0);
+    const double weight = priorWeight + static_cast<double>(observed.size());
+    return static_cast<int>(std::lround(total / weight));
+}
+
+// How much the setup answers should still count for, given how many cycles have
+// actually been observed.
+//
+// This decays to zero rather than levelling off. The averages themselves only
+// look at a sliding window of recent cycles, so without this decay the prior
+// would keep its share of the weight forever and the estimate could never
+// converge on your real cycle length.
+int effectivePriorWeight(int priorStrength, int totalObservedCycles) {
+    return std::max(0, priorStrength - totalObservedCycles);
+}
+
+// Spread of the observed values around their mean, as a whole number of days.
+int standardDeviation(const std::vector<int>& values) {
+    if (values.size() < 2) {
         return 0;
     }
-    const int sum = std::accumulate(values.begin(), values.end(), 0);
-    // Round to nearest rather than truncating.
-    return (sum + static_cast<int>(values.size()) / 2) / static_cast<int>(values.size());
+    const double mean = std::accumulate(values.begin(), values.end(), 0.0) /
+                        static_cast<double>(values.size());
+    double sum = 0.0;
+    for (int v : values) {
+        const double diff = v - mean;
+        sum += diff * diff;
+    }
+    return static_cast<int>(std::lround(std::sqrt(sum / static_cast<double>(values.size()))));
+}
+
+// Keeps only the most recent `window` entries.
+void trimToWindow(std::vector<int>& values, std::size_t window) {
+    if (values.size() > window) {
+        values.erase(values.begin(), values.end() - static_cast<long>(window));
+    }
 }
 
 } // namespace
 
 Tracker::Tracker() {
+    profile_.load();
     load();
 }
 
@@ -48,7 +96,8 @@ Tracker::Tracker() {
 
 std::string Tracker::dataPath() const {
     const char* home = std::getenv("HOME");
-    std::filesystem::path dir = home ? std::filesystem::path(home) : std::filesystem::current_path();
+    std::filesystem::path dir = home ? std::filesystem::path(home)
+                                     : std::filesystem::current_path();
     dir /= "Library/Application Support/PeriodTracker";
     return (dir / "log.csv").string();
 }
@@ -105,6 +154,20 @@ void Tracker::toggle(Date d) {
     save();
 }
 
+void Tracker::logRange(Date start, int days) {
+    for (int i = 0; i < days; ++i) {
+        logged_.insert(addDays(start, i));
+    }
+    recompute();
+    save();
+}
+
+void Tracker::setProfile(const Profile& p) {
+    profile_ = p;
+    profile_.save();
+    recompute();
+}
+
 // --- Analysis --------------------------------------------------------------
 
 void Tracker::recompute() {
@@ -114,8 +177,15 @@ void Tracker::recompute() {
     ovulation_.clear();
     prediction_ = Prediction{};
 
+    // Even with nothing logged, the setup answers are worth showing.
+    prediction_.avgCycleDays =
+        profile_.typicalCycle > 0 ? profile_.typicalCycle : kDefaultCycleDays;
+    prediction_.avgPeriodDays =
+        profile_.typicalPeriod > 0 ? profile_.typicalPeriod : kDefaultPeriodDays;
+    prediction_.spreadDays = profile_.baseSpreadDays();
+
     if (logged_.empty()) {
-        return;
+        return;   // nothing to anchor a date to yet
     }
 
     // Walk the sorted days and group consecutive ones into runs. Each run is
@@ -138,7 +208,7 @@ void Tracker::recompute() {
         cycles_[i].cycleDays = daysBetween(cycles_[i].start, cycles_[i + 1].start);
     }
 
-    // Average the recent, plausible cycle lengths.
+    // Collect the recent, plausible cycle lengths.
     std::vector<int> cycleLengths;
     for (std::size_t i = 0; i + 1 < cycles_.size(); ++i) {
         const int len = cycles_[i].cycleDays;
@@ -146,11 +216,12 @@ void Tracker::recompute() {
             cycleLengths.push_back(len);
         }
     }
-    if (cycleLengths.size() > kAverageWindow) {
-        cycleLengths.erase(cycleLengths.begin(), cycleLengths.end() - static_cast<long>(kAverageWindow));
-    }
+    // Counted before the window is applied: the prior should keep fading as you
+    // keep logging, even though the average itself only looks at recent cycles.
+    const int totalObservedCycles = static_cast<int>(cycleLengths.size());
+    trimToWindow(cycleLengths, kAverageWindow);
 
-    // Average period length, skipping the most recent one if it might still be
+    // Collect period lengths, skipping the most recent one if it might still be
     // ongoing - counting a period that's only half logged would drag the
     // average down.
     std::vector<int> periodLengths;
@@ -162,16 +233,33 @@ void Tracker::recompute() {
             periodLengths.push_back(cycles_[i].periodDays);
         }
     }
-    if (periodLengths.size() > kAverageWindow) {
-        periodLengths.erase(periodLengths.begin(), periodLengths.end() - static_cast<long>(kAverageWindow));
-    }
+    trimToWindow(periodLengths, kAverageWindow);
 
-    prediction_.valid     = true;
-    prediction_.estimated = cycleLengths.empty();
-    prediction_.avgCycleDays =
-        cycleLengths.empty() ? kDefaultCycleDays : averageOf(cycleLengths);
-    prediction_.avgPeriodDays =
-        periodLengths.empty() ? kDefaultPeriodDays : averageOf(periodLengths);
+    // Blend the setup answers with the observed history.
+    const int priorWeight  = effectivePriorWeight(profile_.priorStrength(),
+                                                  totalObservedCycles);
+    const int priorCycle   = profile_.typicalCycle  > 0 ? profile_.typicalCycle
+                                                        : kDefaultCycleDays;
+    const int priorPeriod  = profile_.typicalPeriod > 0 ? profile_.typicalPeriod
+                                                        : kDefaultPeriodDays;
+
+    prediction_.valid          = true;
+    prediction_.observedCycles = totalObservedCycles;
+    prediction_.estimated      = cycleLengths.empty();
+    prediction_.avgCycleDays   = blend(priorCycle, priorWeight, cycleLengths);
+    prediction_.avgPeriodDays  = blend(priorPeriod, priorWeight, periodLengths);
+
+    // The margin of error starts from how regular you said your cycles are and
+    // converges on how variable they actually turn out to be.
+    const int baseSpread = profile_.baseSpreadDays();
+    if (cycleLengths.size() >= 2) {
+        const int observedSpread = std::max(1, standardDeviation(cycleLengths));
+        const std::vector<int> spreadSamples(cycleLengths.size(), observedSpread);
+        prediction_.spreadDays = blend(baseSpread, priorWeight, spreadSamples);
+    } else {
+        prediction_.spreadDays = baseSpread;
+    }
+    prediction_.spreadDays = std::clamp(prediction_.spreadDays, 1, 10);
 
     const int cycleLen  = prediction_.avgCycleDays;
     const int periodLen = prediction_.avgPeriodDays;

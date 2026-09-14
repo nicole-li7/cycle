@@ -12,7 +12,9 @@ find_package(SDL2_ttf REQUIRED)
 add_executable(app
     src/main.cpp
     src/date.cpp
+    src/profile.cpp
     src/tracker.cpp
+    src/onboarding.cpp
     src/ui.cpp
 )
 

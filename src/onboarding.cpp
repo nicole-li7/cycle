@@ -446,6 +446,4 @@ void Onboarding::draw(SDL_Renderer* r, TextRenderer& text, int /*windowW*/, int 
         break;
     }
     }
-
-    SDL_RenderPresent(r);
 }

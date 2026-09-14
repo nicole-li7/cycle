@@ -15,7 +15,9 @@ add_executable(app MACOSX_BUNDLE
     src/main.cpp
     src/date.cpp
     src/profile.cpp
+    src/symptoms.cpp
     src/tracker.cpp
+    src/dayeditor.cpp
     src/onboarding.cpp
     src/ui.cpp
 )

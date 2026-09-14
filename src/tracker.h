@@ -11,6 +11,7 @@
 
 #include "date.h"
 #include "profile.h"
+#include "symptoms.h"
 
 // One past period: a run of consecutive logged days, plus how long it was
 // until the next one began.
@@ -61,6 +62,11 @@ public:
     const Prediction& prediction() const { return prediction_; }
     const Profile& profile() const { return profile_; }
 
+    // --- Symptoms, flow and mood ---
+    bool     hasSymptoms(Date d) const { return symptoms_.has(d); }
+    DayEntry entryFor(Date d) const { return symptoms_.entryFor(d); }
+    const SymptomLog& symptomLog() const { return symptoms_; }
+
     // Day number within the current cycle (1 = first day of the last period).
     // Returns 0 if unknown.
     int currentCycleDay() const;
@@ -73,6 +79,7 @@ public:
     void toggle(Date d);
     void logRange(Date start, int days);
     void setProfile(const Profile& p);
+    void setEntry(Date d, const DayEntry& entry);
 
     // --- Storage ---
     std::string dataPath() const;
@@ -84,6 +91,7 @@ private:
 
     std::set<Date>     logged_;
     Profile            profile_;
+    SymptomLog         symptoms_;
     std::vector<Cycle> cycles_;
     Prediction         prediction_;
 

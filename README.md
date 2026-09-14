@@ -7,8 +7,13 @@ Everything is stored in plain text on this machine, under
 
 | File | Contents |
 | --- | --- |
-| `log.csv` | One ISO date per line - the days you logged |
+| `log.csv` | One ISO date per line - the days you logged as a period |
+| `symptoms.csv` | `date,flow,symptoms,mood` - one row per day with notes |
 | `profile.txt` | Your setup answers, as `key=value` lines |
+
+Symptoms are kept in their own file rather than folded into `log.csv`, so an
+existing log still loads unchanged and a day can carry notes without being a
+period day.
 
 No network, no account, no telemetry. You can read either file, back them up, or
 edit them by hand, and the app will pick up the changes next time it starts.
@@ -82,15 +87,34 @@ you. They're ordinary logged days, so click to correct them if the dates are off
 
 | Action | How |
 | --- | --- |
-| Log / unlog a period day | Click the day |
-| Log today | Space |
+| Open a day | Click it |
+| Log / unlog a period day | Open the day, then the Period button |
+| Log today's period straight away | Space |
 | Previous / next month | Left / Right arrow, or the `<` `>` buttons |
 | Jump back to today | `T`, or the Today button |
 | Change your setup answers | The Setup button in the sidebar |
 | Quit | Escape, or close the window |
 
 Clicking a greyed-out day from a neighbouring month jumps to that month instead
-of logging it.
+of opening it.
+
+### The day panel
+
+Clicking a day opens a panel for it:
+
+- **Period** - marks the day as a period day.
+- **Flow** - light, medium or heavy. Only shown on a period day, since it has no
+  meaning otherwise.
+- **Symptoms** - cramps, headache, bloating, fatigue, nausea, backache, sore
+  breasts, acne. Any number at once.
+- **Mood** - good, calm, irritable, anxious or low. One per day; tapping the
+  selected one again clears it.
+
+**Done**, Escape, or clicking outside closes it. **Clear day** wipes everything
+for that date. A dot under a day number on the calendar means it has notes.
+
+Symptoms do not feed the cycle predictions - those still come only from which
+days are marked as a period.
 
 ## What the colours mean
 
@@ -172,6 +196,8 @@ contraception.
 | `src/main.cpp` | Window, main loop, switching between the two screens |
 | `src/tracker.h/.cpp` | The data: logging, cycle analysis, predictions, saving |
 | `src/profile.h/.cpp` | Your setup answers, and how much they're trusted |
+| `src/symptoms.h/.cpp` | Per-day symptoms, flow and mood, and their storage |
+| `src/dayeditor.h/.cpp` | The panel that opens when you click a day |
 | `src/onboarding.h/.cpp` | The first-run setup screen |
 | `src/date.h/.cpp` | Date helpers built on C++20 `<chrono>` |
 | `src/ui.h/.cpp` | Palette, fonts, shared widgets, calendar layout and drawing |

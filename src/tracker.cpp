@@ -89,6 +89,7 @@ void trimToWindow(std::vector<int>& values, std::size_t window) {
 
 Tracker::Tracker() {
     profile_.load();
+    symptoms_.load();
     load();
 }
 
@@ -160,6 +161,12 @@ void Tracker::logRange(Date start, int days) {
     }
     recompute();
     save();
+}
+
+void Tracker::setEntry(Date d, const DayEntry& entry) {
+    symptoms_.set(d, entry);
+    symptoms_.save();
+    // Symptoms don't feed the cycle maths, so there's nothing to recompute.
 }
 
 void Tracker::setProfile(const Profile& p) {

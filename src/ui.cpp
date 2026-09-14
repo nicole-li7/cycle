@@ -339,6 +339,15 @@ void drawDayCell(SDL_Renderer* r, TextRenderer& text, const Layout::Cell& cell,
     const unsigned dayNumber = unsigned{YMD{cell.date}.day()};
     text.draw(std::to_string(dayNumber), rect.x + rect.w / 2,
               rect.y + rect.h / 2 - 11, 17, numberColor, Align::Center, boldNumber);
+
+    // A dot under the number marks a day carrying symptoms, flow or a mood.
+    // On a logged day it has to be light to show up against the rose fill.
+    if (cell.inViewMonth && tracker.hasSymptoms(cell.date)) {
+        const SDL_Color dotColor =
+            (kind == DayKind::Logged) ? color::kOnPeriod : color::kMuted;
+        SDL_Rect dot{rect.x + rect.w / 2 - 2, rect.y + rect.h / 2 + 14, 5, 5};
+        fillRoundedRect(r, dot, 2, dotColor);
+    }
 }
 
 void drawHeader(SDL_Renderer* r, TextRenderer& text, YMD viewMonth,
@@ -498,7 +507,8 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
     // Legend, pinned to the bottom of the panel - but never above the content,
     // so a taller sidebar can't overlap it either.
     const int legendRowGap = 22;
-    int legendY = panel.h - 26 - 4 * legendRowGap - 24;
+    constexpr int kLegendRows = 5;
+    int legendY = panel.h - 26 - kLegendRows * legendRowGap - 24;
     legendY = std::max(legendY, y + 28);
     text.draw("LEGEND", x, legendY - 24, 11, color::kDim);
     drawLegendRow(r, text, x, legendY, color::kPeriod, false, "Logged period");
@@ -508,6 +518,8 @@ void drawSidebar(SDL_Renderer* r, TextRenderer& text, const Tracker& tracker,
                   "Fertile window");
     drawLegendRow(r, text, x, legendY + 3 * legendRowGap, color::kOvulation, true,
                   "Peak day");
+    drawLegendRow(r, text, x, legendY + 4 * legendRowGap, color::kMuted, false,
+                  "Symptoms noted");
 }
 
 } // namespace
@@ -530,6 +542,6 @@ void drawApp(SDL_Renderer* renderer, TextRenderer& text, const Tracker& tracker,
     }
 
     drawSidebar(renderer, text, tracker, layout, mouseX, mouseY);
-
-    SDL_RenderPresent(renderer);
+    // No SDL_RenderPresent here: the day editor draws on top of this, so the
+    // frame is presented once by the caller.
 }

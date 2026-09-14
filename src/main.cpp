@@ -8,8 +8,9 @@
 //   2. main loop - handle input, then redraw  (repeats until you quit)
 //   3. teardown  - clean up
 //
-// There are two screens. First-time launch shows setup; after that, the
-// calendar. The Setup button in the sidebar reopens setup to change an answer.
+// There are three screens. First-time launch shows setup; after that, the
+// calendar. The Setup button in the sidebar reopens setup to change an answer,
+// and clicking a day opens that day's editor over the calendar.
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -18,6 +19,7 @@
 #include <optional>
 
 #include "date.h"
+#include "dayeditor.h"
 #include "onboarding.h"
 #include "profile.h"
 #include "tracker.h"
@@ -105,6 +107,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
         onboarding.emplace(tracker.profile(), /*editing=*/false);
     }
 
+    // Open while a day is being edited. It draws over the calendar, so the
+    // calendar is still laid out and drawn underneath it.
+    std::optional<DayEditor> dayEditor;
+
     // ---- 2. Main loop -----------------------------------------------------
     while (running) {
         SDL_GetWindowSize(window, &windowW, &windowH);
@@ -116,6 +122,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
             onboarding->layout(windowW, windowH);
         } else {
             layout = computeLayout(viewMonth, windowW, windowH);
+            if (dayEditor) {
+                dayEditor->layout(windowW, windowH);
+            }
         }
 
         // --- Handle input ---
@@ -142,6 +151,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
                     onboarding->handleClick(x, y);
                     break;
                 }
+                if (dayEditor) {
+                    dayEditor->handleClick(x, y);
+                    break;
+                }
 
                 if (pointIn(layout.profileButton, x, y)) {
                     onboarding.emplace(tracker.profile(), /*editing=*/true);
@@ -153,9 +166,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
                     viewMonth = YMD{today()};
                 } else if (const Layout::Cell* cell = layout.cellAt(x, y)) {
                     // Clicking a day in a neighbouring month jumps to that
-                    // month rather than silently logging an off-screen day.
+                    // month rather than opening an editor for an off-screen day.
                     if (cell->inViewMonth) {
-                        tracker.toggle(cell->date);   // also saves to disk
+                        dayEditor.emplace(cell->date, tracker.isLogged(cell->date),
+                                          tracker.entryFor(cell->date));
                     } else {
                         viewMonth = YMD{cell->date};
                     }
@@ -166,6 +180,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
             case SDL_KEYDOWN:
                 if (onboarding) {
                     onboarding->handleKey(event.key.keysym.sym);
+                    break;
+                }
+                if (dayEditor) {
+                    dayEditor->handleKey(event.key.keysym.sym);
                     break;
                 }
                 switch (event.key.keysym.sym) {
@@ -194,6 +212,18 @@ int main(int /*argc*/, char* /*argv*/[]) {
             }
         }
 
+        // --- Apply the day editor's changes, if it just closed ---
+        if (dayEditor && dayEditor->finished()) {
+            const Date edited = dayEditor->day();
+            // toggle() is the only way to change a period day, so call it only
+            // when the editor actually flipped it.
+            if (dayEditor->periodOn() != tracker.isLogged(edited)) {
+                tracker.toggle(edited);
+            }
+            tracker.setEntry(edited, dayEditor->entry());
+            dayEditor.reset();
+        }
+
         // --- Apply the result of setup, if it just ended ---
         if (onboarding && (onboarding->finished() || onboarding->cancelled())) {
             if (onboarding->finished()) {
@@ -212,12 +242,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
         }
 
         // --- Draw ---
+        // Each screen only draws; the finished frame is presented once here.
         if (onboarding) {
             onboarding->draw(renderer, text, windowW, windowH, mouseX, mouseY);
         } else {
             drawApp(renderer, text, tracker, viewMonth, layout, windowW, windowH,
                     mouseX, mouseY);
+            if (dayEditor) {
+                dayEditor->draw(renderer, text, windowW, windowH, mouseX, mouseY);
+            }
         }
+        SDL_RenderPresent(renderer);
     }
 
     // ---- 3. Teardown ------------------------------------------------------

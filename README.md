@@ -1,240 +1,86 @@
 # Period Tracker
 
-A small offline period tracker for macOS. C++20, SDL2, built with CMake.
+A small offline period tracker for macOS. Log your period on a calendar, note symptoms, flow and mood, and get predictions that sharpen as you log. Nothing ever leaves your Mac.
 
-Everything is stored in plain text on this machine, under
-`~/Library/Application Support/PeriodTracker/`:
+## Features
 
-| File | Contents |
-| --- | --- |
-| `log.csv` | One ISO date per line - the days you logged as a period |
-| `symptoms.csv` | `date,flow,symptoms,mood` - one row per day with notes |
-| `profile.txt` | Your setup answers, as `key=value` lines |
+**Calendar**
+- **Month view**: click a day to open it; click a greyed-out day from a neighbouring month to jump there.
+- **Navigation**: Left/Right arrows or the `<` `>` buttons change month; `T` or the Today button jumps back to today.
+- **Quick log**: Space logs (or unlogs) today's period without opening anything.
+- **Colour key**: solid rose is a logged period, rose outline is predicted, blue fill is the fertile window, deeper blue outline is the peak day, and a ring marks today. A dot under a day number means it has notes.
 
-Symptoms are kept in their own file rather than folded into `log.csv`, so an
-existing log still loads unchanged and a day can carry notes without being a
-period day.
+**Day panel**
+- **Period**: mark a day as a period day (Space also toggles it here).
+- **Flow**: light, medium or heavy, shown only on period days.
+- **Symptoms**: cramps, headache, bloating, fatigue, nausea, backache, sore breasts, acne; any number at once.
+- **Mood**: good, calm, irritable, anxious or low; one per day.
+- **Clear day** wipes the date; Done, Enter or Escape closes the panel.
 
-No network, no account, no telemetry. You can read either file, back them up, or
-edit them by hand, and the app will pick up the changes next time it starts.
+**Predictions (sidebar)**
+- **Next period**: a countdown plus the date and a margin of error, or "Period day N" while one is under way.
+- **Cycle day**, **average cycle**, **average period** and the date the last period began.
+- **Fertile window and peak day**: estimated and shown on the calendar, including months ahead.
+- **Basis line**: says how many logged cycles the figures rest on.
+- **Setup answers count at first**: they act as a starting guess that real data gradually replaces.
 
-## Install it
+**Setup**
+- **First-run questions**: cycle length, period length, regularity, age and when your last period started. All optional ("Not sure" skips one, "Skip" skips all).
+- **Last period start** is logged on the calendar for you; click to correct it.
+- **Setup button** in the sidebar reopens the questions any time.
+
+**Symptom summary**
+- **Summary button**: each symptom gets a one-cycle track (period and fertile window shaded) with a mark at each cycle day it was recorded.
+- **Counts and typical day**: days recorded and the median cycle day, or "not enough yet" under three placed occurrences.
+- **Mood and flow totals**, shown alongside.
+- **Read-only**: it never changes the predicted dates.
+
+**Other**
+- **Escape** closes the open panel or screen; on the plain calendar it quits.
+
+## Getting started
+
+Install the dependencies, then build and install:
 
 ```sh
+brew install cmake sdl2 sdl2_ttf
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 cmake --install build          # puts Period Tracker.app in /Applications
 ```
 
-After that it opens from Spotlight, Finder or the Dock like any other app.
-
-## Build & run while working on it
+After that it opens from Spotlight, Finder or the Dock. To run from the build folder with output in the terminal:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug   # once, or after editing CMakeLists.txt
-cmake --build build
 './build/Period Tracker.app/Contents/MacOS/Period Tracker'
 ```
 
-Running the executable inside the bundle directly keeps its output in the
-terminal, which is what you want while debugging.
+## How it's built
 
-In VS Code: **Cmd-Shift-B** builds, **F5** runs it under the debugger, and
-*Tasks: Run Task* has an **install to /Applications** entry.
+C++20 with SDL2 and SDL2_ttf, built with CMake. Dates use `<chrono>`. After each build, `tools/bundle_libs.sh` copies the Homebrew libraries into the app and ad-hoc signs it, so the installed app does not need Homebrew. The icon comes from `tools/make_icon.py`, and the colour theme lives in the `color` namespace in `src/ui.h`.
 
-## About the app bundle
-
-The build produces `Period Tracker.app`, not a bare executable. Two parts of
-that are worth knowing about.
-
-**It is self-contained.** The executable is compiled against Homebrew's
-libraries in `/opt/homebrew`, which would mean the app breaks if Homebrew were
-removed or cleaned up. `tools/bundle_libs.sh` walks the dependency tree after
-each build, copies every non-system library into `Contents/Frameworks`, and
-rewrites the recorded paths to point inside the bundle. All 10 of them, roughly
-5 MB. One of those, `libSDL3.dylib`, is loaded by `dlopen` rather than linked,
-so it never appears in `otool -L` output and is copied explicitly.
-
-Because rewriting a binary invalidates its code signature, the script re-signs
-everything at the end with an ad-hoc signature. That is enough for macOS to run
-it on this machine; sending it to someone else would need a Developer ID.
-
-**The icon** is generated by `tools/make_icon.py`, which draws it from signed
-distance fields at each size rather than scaling one image down. Run that script
-only if you want to change the icon.
-
-## Changing the app's name or icon
-
-The name comes from `APP_NAME` in `CMakeLists.txt`. The icon comes from
-`assets/AppIcon.icns` - edit the colours or shapes near the top of
-`tools/make_icon.py`, re-run it, and rebuild.
-
-## First-run setup
-
-The first time you open the app it asks a short series of questions: usual cycle
-length, usual period length, how regular your cycles are, your age, and when your
-last period started. Every one of them is optional - "Not sure" skips any
-question, and "Skip" on the first screen skips the lot.
-
-The point of the questions is to have something to predict from on day one,
-before any cycles have been logged. You can change the answers later with the
-**Setup** button at the top of the sidebar.
-
-If you give a last period start date, those days are logged on the calendar for
-you. They're ordinary logged days, so click to correct them if the dates are off.
-
-## Using it
-
-| Action | How |
-| --- | --- |
-| Open a day | Click it |
-| Log / unlog a period day | Open the day, then the Period button |
-| Log today's period straight away | Space |
-| Previous / next month | Left / Right arrow, or the `<` `>` buttons |
-| Jump back to today | `T`, or the Today button |
-| Change your setup answers | The Setup button in the sidebar |
-| See the symptom summary | The Summary button in the header |
-| Quit | Escape, or close the window |
-
-Clicking a greyed-out day from a neighbouring month jumps to that month instead
-of opening it.
-
-### The day panel
-
-Clicking a day opens a panel for it:
-
-- **Period** - marks the day as a period day.
-- **Flow** - light, medium or heavy. Only shown on a period day, since it has no
-  meaning otherwise.
-- **Symptoms** - cramps, headache, bloating, fatigue, nausea, backache, sore
-  breasts, acne. Any number at once.
-- **Mood** - good, calm, irritable, anxious or low. One per day; tapping the
-  selected one again clears it.
-
-**Done**, Escape, or clicking outside closes it. **Clear day** wipes everything
-for that date. A dot under a day number on the calendar means it has notes.
-
-Symptoms do not feed the cycle predictions - those still come only from which
-days are marked as a period.
-
-## The symptom summary
-
-The **Summary** button shows what you've recorded, counted up.
-
-Each symptom gets a track representing one cycle, from day 1 to your typical
-cycle length, with the period shaded rose at the start and the fertile window
-shaded blue in the middle. Every time you recorded that symptom is drawn as a
-mark at the cycle day it fell on, so a symptom that clusters somewhere shows it.
-Repeats on the same cycle day stack into a taller mark.
-
-Alongside each track: how many days you've recorded it, and the **typical cycle
-day**, which is the median rather than the mean so a single odd month can't drag
-it. Below three placed occurrences it says "not enough yet" instead of showing a
-number that would only be noise.
-
-A note can only be placed on the track if a period start is known before it, and
-within 60 days of it. Notes that can't be placed still count towards the totals,
-and the subtitle says how many of them there are.
-
-This screen is read-only and deliberately has no effect on the predicted dates.
-Working backwards from symptoms to guess cycle timing is guesswork, and it has
-no business quietly moving the dates the app shows you.
-
-## What the colours mean
-
-| | |
-| --- | --- |
-| Solid rose | A day you logged |
-| Rose outline | Predicted period |
-| Baby blue fill | Estimated fertile window |
-| Deeper blue outline | Estimated peak (ovulation) day |
-| Soft brown ring | Today |
-
-The whole theme lives in the `color` namespace at the top of `src/ui.h` - it is
-the only place to edit to recolour the app. The values there are tuned so every
-text colour clears WCAG AA contrast (4.5:1) against whatever it sits on, and
-every outline clears 3:1. Pale tones on a light background fail that easily, so
-it's worth re-checking if you change them.
-
-## How the predictions work
-
-`src/tracker.cpp` holds all of it.
-
-Consecutive logged days are grouped into runs; each run is one period, and the
-day a run starts is the day that cycle began. The gap between consecutive starts
-is a cycle length.
-
-- **Average cycle** — the mean of the last 6 cycle lengths. Gaps shorter than 15
-  or longer than 60 days are skipped, since those are usually a missed log
-  rather than a real cycle.
-- **Average period** — the mean of the last 6 run lengths. The most recent run is
-  skipped if it might still be in progress, so a half-logged period doesn't drag
-  the average down.
-- **Next period** — the last period's start plus the average cycle length.
-- **Ovulation** — counted *backwards* from the next predicted period (14 days
-  before it), not forwards from the last one. The luteal phase is the more
-  stable half of the cycle, so this is the more reliable direction.
-- **Fertile window** — the 5 days before ovulation through 1 day after.
-
-### Why it gets more accurate as you log
-
-Your setup answers act as a starting guess that real data gradually replaces.
-
-The guess is given a weight in "number of cycles it counts for", set by how
-regular you said your cycles are - 4 for regular, 2 for fairly regular, 1 for
-irregular or unanswered. A confident answer holds its ground longer; an unsure
-one is overtaken almost immediately.
-
-That weight then drops by one for every cycle actually observed, so it reaches
-zero and the setup answers stop mattering entirely. The decay matters: the
-averages only look at a sliding window of recent cycles, so without it the guess
-would keep a permanent share of the weight and the estimate could never converge
-on your real cycle length.
-
-Told it 30 days, actually 26, "regular":
-
-| Cycles logged | Estimate | Margin |
-| --- | --- | --- |
-| 0 | 30 days | ± 2 days |
-| 1 | 29 days | ± 2 days |
-| 2 | 28 days | ± 2 days |
-| 3 | 27 days | ± 1 day |
-| 4 | 26 days | ± 1 day |
-
-The **margin of error** shown next to the predicted date starts from your
-regularity answer (± 2, 4 or 7 days), widened by a day if you're under 20 or over
-45, and converges on how variable your cycles actually turn out to be. Age is
-used for nothing else.
-
-If setup is skipped entirely and nothing is logged, it falls back to a 28-day
-cycle and a 5-day period.
-
-These are averages of your own history, not a medical prediction — cycles shift
-with stress, illness, travel and plenty else. Don't use the fertile window as
-contraception.
-
-## Layout
-
-| File | What's in it |
-| --- | --- |
-| `src/main.cpp` | Window, main loop, switching between the two screens |
-| `src/tracker.h/.cpp` | The data: logging, cycle analysis, predictions, saving |
-| `src/profile.h/.cpp` | Your setup answers, and how much they're trusted |
-| `src/symptoms.h/.cpp` | Per-day symptoms, flow and mood, and their storage |
-| `src/dayeditor.h/.cpp` | The panel that opens when you click a day |
-| `src/insights.h/.cpp` | The symptom summary: counting and drawing it |
-| `src/onboarding.h/.cpp` | The first-run setup screen |
-| `src/date.h/.cpp` | Date helpers built on C++20 `<chrono>` |
-| `src/ui.h/.cpp` | Palette, fonts, shared widgets, calendar layout and drawing |
-
-To add a source file, put it in the `add_executable(app ...)` list in
-`CMakeLists.txt` and re-run the configure step.
-
-## Dependencies
-
-```sh
-brew install cmake sdl2 sdl2_ttf
+```
+src/main.cpp       window, main loop, screen switching
+src/tracker.*      logging, cycle analysis, predictions, saving
+src/profile.*      setup answers and how much they are trusted
+src/symptoms.*     per-day symptoms, flow and mood
+src/dayeditor.*    the day panel
+src/insights.*     the symptom summary
+src/onboarding.*   the setup screens
+src/date.*         date helpers
+src/ui.*           palette, fonts, widgets, calendar drawing
+tools/             bundle_libs.sh, make_icon.py
+assets/            AppIcon.icns
 ```
 
-These are needed to *build* the app. The finished `.app` does not need them -
-it carries its own copies.
+New source files go in the `add_executable` list in `CMakeLists.txt`.
+
+## Your data
+
+Everything stays on this Mac in `~/Library/Application Support/PeriodTracker/`. There is no networking, no account and no telemetry.
+
+- `log.csv`: one ISO date per line, the days you logged as a period.
+- `symptoms.csv`: `date,flow,symptoms,mood`, one row per day with notes.
+- `profile.txt`: your setup answers as `key=value` lines.
+
+They are plain text, so you can back them up or edit them by hand; changes are picked up next launch. The predictions are averages of your own history, not medical advice, so don't rely on the fertile window for contraception.

@@ -4,10 +4,9 @@ A small offline period tracker for macOS. Log your period on a calendar, note sy
 
 ## Demo
 
-![Logging two periods and watching the prediction update](docs/demo.gif)
+![Logging a period day by day and watching the next-period prediction update, then opening the symptom summary](docs/demo.gif)
 
-Recorded from the interactive demo on my portfolio, a JavaScript port of the app's logic running on sample data. [Try it in your browser](https://nicole-li7.github.io/projects/cycle.html).
-
+Recorded from the app itself running on made-up sample data (none of it is real health data). There's also a browser version on my portfolio: [try it here](https://nicole-li7.github.io/projects/cycle.html).
 
 ## Features
 
